@@ -16,8 +16,4 @@ export abstract class BasePage {
     this.ai = new PlaywrightAgent(page) as unknown as MidscenePageAgent;
   }
 
-  /** 等待网络请求收敛，适用于明确会结束请求的页面转换。 */
-  protected async waitForNetworkIdle(): Promise<void> {
-    await this.page.waitForLoadState('networkidle');
-  }
 }

@@ -11,6 +11,11 @@ export class DashboardPage extends BasePage {
 
   /** 将相对画布坐标映射到当前可见画布位置，避免页面尺寸变化破坏点击目标。 */
   async selectCanvasChartSegment(xOffsetPct: number, yOffsetPct: number): Promise<void> {
+    // 拒绝超出归一化比例范围的坐标，防止错误参数把点击发到画布之外。
+    if (![xOffsetPct, yOffsetPct].every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) {
+      throw new RangeError('Canvas offsets must be finite numbers between 0 and 1.');
+    }
+
     const canvas = this.page.locator('canvas#analytics-viewport');
     await canvas.waitFor({ state: 'visible' });
     const box = await canvas.boundingBox();
@@ -23,7 +28,6 @@ export class DashboardPage extends BasePage {
       box.x + box.width * xOffsetPct,
       box.y + box.height * yOffsetPct,
     );
-    await this.waitForNetworkIdle();
   }
 
   /** 通过 Playwright frameLocator 访问跨域 iframe 中的标准表单控件。 */
@@ -39,12 +43,16 @@ export class DashboardPage extends BasePage {
     );
   }
 
-  /** 从动态表格中提取稳定字段；具体分页策略留给目标应用的扩展页面模型实现。 */
+  /** 从语义化 HTML 表格读取当前页数据，避免模型在确定性数据上产生幻觉。 */
   async getTransactionRows(): Promise<Array<{ date: string; status: string }>> {
-    const schema = `{
-      transactions: "An array of rows containing string attributes 'date' and 'status' extracted from the table layout"
-    }`;
-    const result = await this.ai.aiQuery<{ transactions?: Array<{ date: string; status: string }> }>(schema);
-    return result?.transactions ?? [];
+    return this.page.locator('table tbody tr').evaluateAll((rows) =>
+      rows.map((row) => {
+        const cells = row.querySelectorAll('td');
+        return {
+          date: cells[0]?.textContent?.trim() ?? '',
+          status: cells[1]?.textContent?.trim() ?? '',
+        };
+      }).filter((row) => row.date.length > 0 && row.status.length > 0),
+    );
   }
 }

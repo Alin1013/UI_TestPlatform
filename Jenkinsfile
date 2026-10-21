@@ -13,15 +13,6 @@ pipeline {
         timestamps()
     }
 
-    environment {
-        // Jenkins credential binding keeps the model key out of source and console commands.
-        OPENAI_API_KEY = credentials('OPENAI_API_KEY')
-        OPENAI_BASE_URL = 'https://api.openai.com/v1'
-        MIDSCENE_MODEL_NAME = 'gpt-4o'
-        APP_BASE_URL = credentials('APP_BASE_URL')
-        CI = 'true'
-    }
-
     stages {
         stage('Install dependencies and browser') {
             steps {
@@ -31,6 +22,14 @@ pipeline {
         }
 
         stage('Run UI automation') {
+            environment {
+                // Credentials are scoped to this stage and never required by the standalone browser smoke.
+                OPENAI_API_KEY = credentials('OPENAI_API_KEY')
+                APP_BASE_URL = credentials('APP_BASE_URL')
+                OPENAI_BASE_URL = 'https://api.openai.com/v1'
+                MIDSCENE_MODEL_NAME = 'gpt-4o'
+                CI = 'true'
+            }
             steps {
                 sh 'npm run typecheck'
                 sh 'npm test'
