@@ -1,0 +1,10 @@
+# Local credentials and machine-specific configuration must never enter source control.
+.env
+.env.*
+!.env.example
+node_modules/
+playwright-report/
+midscene_report/
+test-results/
+playwright/.cache/
+*.log
