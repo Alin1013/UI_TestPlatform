@@ -36,10 +36,10 @@ export class DashboardPage extends BasePage {
     await secureFrame.locator('input#corporate-email').fill(email);
   }
 
-  /** 把非结构化视觉布局交给 Midscene 判断，避免脆弱地绑定卡片排版细节。 */
+  /** 把示例布局交给 Midscene 判断；生产项目应按真实页面契约调整提示内容。 */
   async verifyDashboardState(): Promise<void> {
     await this.ai.aiAssert(
-      'The main data chart displays trends without overlapping text, and the top metric cards show green positive arrows.',
+      'The dashboard heading is visible and the analytics chart is present without overlapping content.',
     );
   }
 
@@ -54,5 +54,25 @@ export class DashboardPage extends BasePage {
         };
       }).filter((row) => row.date.length > 0 && row.status.length > 0),
     );
+  }
+
+  /** 遍历语义表格的分页数据；每次翻页都等待页码变化，防止重复读取旧页。 */
+  async getAllTransactionRows(): Promise<Array<{ date: string; status: string }>> {
+    const allRows: Array<{ date: string; status: string }> = [];
+    let currentPage = await this.page.getByTestId('page-indicator').innerText();
+
+    while (true) {
+      allRows.push(...await this.getTransactionRows());
+      const nextPage = this.page.getByRole('button', { name: 'Next page' });
+      if (await nextPage.isDisabled()) break;
+      await nextPage.click();
+      await this.page.waitForFunction(
+        (previousPage) => document.querySelector('[data-testid="page-indicator"]')?.textContent !== previousPage,
+        currentPage,
+      );
+      currentPage = await this.page.getByTestId('page-indicator').innerText();
+    }
+
+    return allRows;
   }
 }

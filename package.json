@@ -5,8 +5,11 @@
   "description": "Hybrid Playwright and Midscene.js end-to-end automation framework",
   "scripts": {
     "clean": "rimraf playwright-report midscene_report test-results",
-    "test": "playwright test",
-    "test:debug": "playwright test --headed",
+    "test": "playwright test --project=smoke",
+    "test:smoke": "playwright test --project=smoke",
+    "test:ai": "node scripts/require-ai-config.mjs && playwright test --project=visual",
+    "demo": "node scripts/serve-demo.mjs",
+    "test:debug": "playwright test --project=smoke --headed",
     "test:report": "playwright show-report playwright-report",
     "typecheck": "tsc --noEmit"
   },

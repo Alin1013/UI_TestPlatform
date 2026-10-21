@@ -2,18 +2,31 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 import path from 'node:path';
+import { loadRuntimeConfig } from './src/config/runtime-config';
 
 // 从仓库根目录加载本地配置；CI 环境变量仍可覆盖该文件中的值。
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-const isCI = Boolean(process.env.CI);
+// 在 Playwright 启动 worker 前校验 URL 与并发配置，避免配置错误表现成用例故障。
+const runtimeConfig = loadRuntimeConfig(process.env);
+const isCI = runtimeConfig.isCI;
+const usesBundledDemo = runtimeConfig.appBaseUrl === 'http://127.0.0.1:4173';
 
 export default defineConfig({
   testDir: './tests',
+  // 只有使用默认本地目标时才启动 demo，接入外部测试环境不额外占用端口。
+  ...(usesBundledDemo ? {
+    webServer: {
+      command: 'npm run demo',
+      url: 'http://127.0.0.1:4173/health',
+      reuseExistingServer: !isCI,
+      timeout: 15_000,
+    },
+  } : {}),
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
-  workers: isCI ? 2 : undefined,
+  workers: runtimeConfig.workers ?? (isCI ? 2 : undefined),
   timeout: 60_000,
   reporter: [
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
@@ -21,8 +34,8 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    // 未配置目标站点时不猜测生产 URL；示例测试会给出明确的跳过原因。
-    baseURL: process.env.APP_BASE_URL,
+    // 默认地址指向随仓库提供的演示站点，显式配置时才访问用户指定的测试环境。
+    baseURL: runtimeConfig.appBaseUrl,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'on-first-retry',
@@ -30,7 +43,14 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'smoke',
+      testMatch: /(?:smoke|dashboard)\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // AI 用例独立成项目；脚本入口会在启动浏览器前强制检查密钥和模型名。
+      name: 'visual',
+      testMatch: /visual\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
   ],

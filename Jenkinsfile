@@ -13,6 +13,10 @@ pipeline {
         timestamps()
     }
 
+    parameters {
+        booleanParam(name: 'RUN_VISUAL', defaultValue: false, description: 'Run Midscene visual checks (requires approved model credentials).')
+    }
+
     stages {
         stage('Install dependencies and browser') {
             steps {
@@ -23,16 +27,26 @@ pipeline {
 
         stage('Run UI automation') {
             environment {
-                // Credentials are scoped to this stage and never required by the standalone browser smoke.
-                OPENAI_API_KEY = credentials('OPENAI_API_KEY')
-                APP_BASE_URL = credentials('APP_BASE_URL')
-                OPENAI_BASE_URL = 'https://api.openai.com/v1'
-                MIDSCENE_MODEL_NAME = 'gpt-4o'
+                // 默认门禁只运行本地确定性 smoke，不需要业务站点或模型密钥。
                 CI = 'true'
             }
             steps {
                 sh 'npm run typecheck'
+                // 在启动浏览器前解析并验证全部运行配置，避免错误目标开始执行用例。
+                sh 'npx playwright test --list --project=smoke'
                 sh 'npm test'
+            }
+        }
+
+        stage('Optional visual checks') {
+            when { expression { return params.RUN_VISUAL } }
+            environment {
+                OPENAI_API_KEY = credentials('OPENAI_API_KEY')
+                MIDSCENE_MODEL_NAME = credentials('MIDSCENE_MODEL_NAME')
+                CI = 'true'
+            }
+            steps {
+                sh 'npm run test:ai'
             }
         }
     }
