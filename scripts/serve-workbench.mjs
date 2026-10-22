@@ -114,7 +114,8 @@ createServer(async (request, response) => {
       return;
     }
     // 独立页面路由共享同一单页壳；直接刷新或复制路由地址也能打开对应视图。
-    if (request.method === 'GET' && ['/', '/index.html', '/cases', '/cases/single', '/cases/combination', '/reports', '/settings'].includes(url.pathname)) {
+    if (request.method === 'GET' && (['/', '/index.html', '/cases', '/cases/combination', '/storage', '/reports', '/settings'].includes(url.pathname)
+      || /^\/cases\/edit\/(?:new|[a-z0-9-]+)$/.test(url.pathname))) {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end(await readFile(path.join(root, 'public', 'workbench.html')));
       return;
