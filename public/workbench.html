@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>UI 自动化用例工作台</title>
+  <style>
+    /* 工作台采用单页双栏布局，让用例选择、编辑和执行状态保持同屏可见。 */
+    :root { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17202a; background: #f3f6fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { padding: 22px max(24px, calc((100vw - 1180px) / 2)); background: #132238; color: white; }
+    header h1 { margin: 0 0 5px; font-size: 21px; }
+    header p { margin: 0; color: #b9c8d9; font-size: 13px; }
+    main { max-width: 1180px; margin: 24px auto; padding: 0 18px; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; }
+    .panel { background: white; border: 1px solid #e1e7ef; border-radius: 12px; padding: 18px; box-shadow: 0 4px 14px #1b36500a; }
+    h2 { margin: 0 0 15px; font-size: 16px; }
+    .case-list { display: grid; gap: 8px; }
+    button { border: 0; border-radius: 7px; background: #1769d2; color: white; padding: 9px 13px; cursor: pointer; font: inherit; }
+    button.secondary { background: #eaf1fa; color: #24456b; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .case-item { display: block; text-align: left; width: 100%; background: #f5f8fc; color: #23374d; }
+    .case-item.active { background: #e4f0ff; outline: 1px solid #7ab4f5; }
+    .row { display: flex; align-items: center; gap: 8px; }
+    .row.between { justify-content: space-between; }
+    label { display: block; margin: 12px 0 5px; color: #40546a; font-size: 12px; font-weight: 650; }
+    input, select { width: 100%; border: 1px solid #cdd7e3; border-radius: 6px; padding: 9px 10px; background: white; color: #17202a; font: inherit; }
+    .step { display: grid; grid-template-columns: 155px minmax(100px, 1fr) minmax(100px, 1.3fr) 34px; gap: 8px; align-items: end; padding: 10px; margin-top: 9px; border: 1px solid #e7ecf2; border-radius: 8px; }
+    .step label { margin-top: 0; }
+    .step .value-wrap.hidden, .step .selector-wrap.hidden { display: none; }
+    .remove { background: #fbe9e8; color: #a23a34; padding: 8px; }
+    .hint { font-size: 12px; color: #66788a; line-height: 1.6; }
+    #status { min-height: 20px; margin: 12px 0 0; font-size: 13px; }
+    #output { max-height: 270px; overflow: auto; background: #101a27; color: #d5e2f1; padding: 12px; border-radius: 8px; white-space: pre-wrap; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .empty { color: #718196; padding: 12px 0; font-size: 13px; }
+    @media (max-width: 760px) { main { grid-template-columns: 1fr; } .step { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <header><h1>UI 自动化用例工作台</h1><p>创建、保存并运行 Playwright 用例 · 本机访问，仅执行受限的浏览器操作</p></header>
+  <main>
+    <aside class="panel">
+      <div class="row between"><h2>我的用例</h2><button id="newCase" class="secondary">新建</button></div>
+      <div id="caseList" class="case-list"></div>
+      <p class="hint">用例保存在仓库根目录的 <code>.local-test-cases.json</code>，不会提交到 Git。</p>
+    </aside>
+    <section class="panel">
+      <div class="row between"><h2>编辑用例</h2><div class="row"><button id="addStep" class="secondary">添加步骤</button><button id="saveCase">保存用例</button></div></div>
+      <label for="caseName">用例名称</label><input id="caseName" maxlength="120" placeholder="例如：登录后显示工作台">
+      <div id="steps"></div>
+      <p class="hint">路径填写相对地址（如 <code>/dashboard</code>）。定位器填写 CSS 选择器或 Playwright 可用的 text=、role= 定位器；外部被测主机仍需通过 <code>.env</code> 的主机白名单校验。</p>
+      <div class="row" style="margin-top:14px"><button id="runCase">运行当前用例</button><a href="/report/index.html" target="_blank">打开最近 HTML 报告</a></div>
+      <p id="status" role="status"></p><pre id="output">执行输出将在这里显示。</pre>
+    </section>
+  </main>
+  <script>
+    // 前端只管理表单状态；所有保存与执行请求都交给本机 API 校验和处理。
+    const actions = { goto: '打开页面', click: '点击元素', fill: '填写内容', assertVisible: '检查元素可见', assertText: '检查包含文本' };
+    let cases = [];
+    let currentId = null;
+    const list = document.querySelector('#caseList');
+    const steps = document.querySelector('#steps');
+    const status = document.querySelector('#status');
+    const output = document.querySelector('#output');
+
+    async function api(url, data) {
+      const response = await fetch(url, data ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) } : {});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '请求失败');
+      return result;
+    }
+    function stepRow(step = { action: 'goto', selector: '', value: '/dashboard' }) {
+      const row = document.createElement('div'); row.className = 'step';
+      row.innerHTML = '<div><label>操作</label><select class="action">' + Object.entries(actions).map(([key, name]) => '<option value="' + key + '">' + name + '</option>').join('') + '</select></div><div class="selector-wrap"><label>定位器</label><input class="selector" placeholder="例如 button 或 #submit"></div><div class="value-wrap"><label>内容 / 路径</label><input class="value" placeholder="文本或 /path"></div><button class="remove" title="删除步骤">×</button>';
+      row.querySelector('.action').value = step.action;
+      row.querySelector('.selector').value = step.selector || '';
+      row.querySelector('.value').value = step.value || '';
+      const update = () => { const needsSelector = step.action !== 'goto'; row.querySelector('.selector-wrap').classList.toggle('hidden', !needsSelector); row.querySelector('.value-wrap').classList.toggle('hidden', !['goto', 'fill', 'assertText'].includes(step.action)); };
+      row.querySelector('.action').addEventListener('change', (event) => { step.action = event.target.value; update(); });
+      row.querySelector('.remove').addEventListener('click', () => row.remove());
+      update(); steps.append(row);
+    }
+    function readEditor() {
+      const name = document.querySelector('#caseName').value.trim();
+      const items = [...steps.querySelectorAll('.step')].map((row) => ({ action: row.querySelector('.action').value, selector: row.querySelector('.selector').value.trim(), value: row.querySelector('.value').value }));
+      return { id: currentId || (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now().toString(36)), name, steps: items };
+    }
+    function selectCase(testCase) {
+      currentId = testCase.id; document.querySelector('#caseName').value = testCase.name; steps.replaceChildren(); testCase.steps.forEach((step) => stepRow(step));
+      [...list.children].forEach((item) => item.classList.toggle('active', item.dataset.id === currentId)); status.textContent = '';
+    }
+    async function refresh() {
+      cases = (await api('/api/cases')).cases; list.replaceChildren();
+      cases.forEach((testCase) => { const button = document.createElement('button'); button.className = 'case-item'; button.dataset.id = testCase.id; button.textContent = testCase.name; button.addEventListener('click', () => selectCase(testCase)); list.append(button); });
+      if (!cases.length) { const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = '还没有用例，点击“新建”开始。'; list.append(empty); }
+    }
+    document.querySelector('#newCase').addEventListener('click', () => { currentId = null; document.querySelector('#caseName').value = ''; steps.replaceChildren(); stepRow(); status.textContent = '新用例尚未保存'; });
+    document.querySelector('#addStep').addEventListener('click', () => stepRow({ action: 'assertVisible', selector: 'h1', value: '' }));
+    document.querySelector('#saveCase').addEventListener('click', async () => { try { const saved = await api('/api/cases', readEditor()); await refresh(); selectCase(saved.cases.find((item) => item.id === currentId) || saved.cases.at(-1)); status.textContent = '已保存'; } catch (error) { status.textContent = error.message; } });
+    document.querySelector('#runCase').addEventListener('click', async (event) => {
+      const button = event.currentTarget; button.disabled = true; output.textContent = '正在运行…'; status.textContent = '';
+      try {
+        const testCase = readEditor();
+        if (!cases.some((item) => item.id === testCase.id)) throw new Error('请先保存用例，再运行。');
+        const result = await api('/api/run', { id: testCase.id }); output.textContent = result.output || '执行结束'; status.textContent = result.passed ? '执行通过' : '执行失败';
+      } catch (error) { status.textContent = error.message; output.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    refresh().catch((error) => { status.textContent = error.message; });
+  </script>
+</body>
+</html>

@@ -48,6 +48,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      // 工作台动态用例单独运行，避免默认 smoke 命令因缺少本地用例而失败。
+      name: 'workbench',
+      testMatch: /workbench-case\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       // AI 用例独立成项目；脚本入口会在启动浏览器前强制检查密钥和模型名。
       name: 'visual',
       testMatch: /visual\.spec\.ts/,

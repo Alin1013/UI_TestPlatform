@@ -9,6 +9,7 @@
     "test:smoke": "playwright test --project=smoke",
     "test:ai": "node scripts/require-ai-config.mjs && playwright test --project=visual",
     "demo": "node scripts/serve-demo.mjs",
+    "workbench": "node scripts/serve-workbench.mjs",
     "test:debug": "playwright test --project=smoke --headed",
     "test:report": "playwright show-report playwright-report",
     "typecheck": "tsc --noEmit"

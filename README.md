@@ -24,7 +24,10 @@ npm run test:ai      # 独立视觉项目；执行前要求 OPENAI_API_KEY 和 M
 npm run test:debug   # headed 调试
 npm run test:report  # 查看 HTML 报告
 npm run clean        # 清理报告与测试产物
+npm run workbench    # 打开本地用例工作台（http://127.0.0.1:4174）
 ```
+
+工作台支持通过界面组合“打开页面、点击、填写、检查可见、检查文本”步骤并运行。用例保存在本地忽略文件 `.local-test-cases.json`；目标环境仍通过 `.env` 中的 `APP_BASE_URL` 和 `APP_ALLOWED_HOSTS` 配置，工作台仅监听回环地址。
 
 配置通过 `.env` 或进程环境传入，`.env.example` 是无秘密模板：
 

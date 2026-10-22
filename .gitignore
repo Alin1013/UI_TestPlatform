@@ -6,5 +6,6 @@ node_modules/
 playwright-report/
 midscene_report/
 test-results/
+.local-test-cases.json
 playwright/.cache/
 *.log
