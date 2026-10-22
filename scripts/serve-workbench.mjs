@@ -50,13 +50,14 @@ async function requestJson(request) {
 }
 
 /** 启动固定测试文件并把结果回传给工作台；同时只允许一个执行进程。 */
-function runCase(testCase) {
+function runCases(testCases) {
   if (activeRun) return Promise.resolve({ busy: true, output: '已有用例正在执行，请稍后重试。' });
   const cli = path.join(root, 'node_modules', '@playwright', 'test', 'cli.js');
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cli, 'test', 'tests/workbench-case.spec.ts', '--project=workbench'], {
       cwd: root,
-      env: { ...process.env, PLAYWRIGHT_CASE_ID: testCase.id },
+      // 将组合顺序原样传入固定测试入口，批次仍由服务端串行占用执行锁。
+      env: { ...process.env, PLAYWRIGHT_CASE_IDS: JSON.stringify(testCases.map((testCase) => testCase.id)) },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     activeRun = child;
@@ -96,17 +97,24 @@ createServer(async (request, response) => {
       return;
     }
     if (request.method === 'POST' && url.pathname === '/api/run') {
-      const { id } = await requestJson(request);
-      const testCase = (await readCases()).find((item) => item.id === id);
-      if (!testCase) {
-        sendJson(response, 404, { error: '找不到该用例，请先保存。' });
+      const payload = await requestJson(request);
+      const ids = Array.isArray(payload.ids) ? payload.ids : [payload.id];
+      if (!ids.length || ids.length > 30 || ids.some((id) => typeof id !== 'string') || new Set(ids).size !== ids.length) {
+        sendJson(response, 400, { error: '请选择 1 到 30 个不重复的用例。' });
         return;
       }
-      const result = await runCase(testCase);
+      const allCases = await readCases();
+      const testCases = ids.map((id) => allCases.find((item) => item.id === id));
+      if (testCases.some((testCase) => !testCase)) {
+        sendJson(response, 404, { error: '组合中有用例已不存在，请刷新后重试。' });
+        return;
+      }
+      const result = await runCases(testCases);
       sendJson(response, result.busy ? 409 : 200, result);
       return;
     }
-    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    // 独立页面路由共享同一单页壳；直接刷新或复制路由地址也能打开对应视图。
+    if (request.method === 'GET' && ['/', '/index.html', '/cases', '/cases/single', '/cases/combination', '/reports', '/settings'].includes(url.pathname)) {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end(await readFile(path.join(root, 'public', 'workbench.html')));
       return;
