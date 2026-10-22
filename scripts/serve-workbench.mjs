@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.WORKBENCH_PORT || 4174);
 const casesPath = path.join(root, '.local-test-cases.json');
+const workflowsPath = path.join(root, '.local-test-workflows.json');
 let activeRun = null;
 
 /** 读取本机保存的用例；首次运行返回空集合，避免覆盖使用者已有数据。 */
@@ -18,6 +19,27 @@ async function readCases() {
     if (error.code === 'ENOENT') return [];
     throw error;
   }
+}
+
+/** 读取本地工作流；将工作流文件独立于用例文件保存，避免分类操作改写用例。 */
+async function readWorkflows() {
+  try {
+    return JSON.parse(await readFile(workflowsPath, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+/** 限制工作流名称、模块和用例引用，执行时只接受已有用例 ID。 */
+function validateWorkflow(workflow, cases) {
+  return Boolean(workflow
+    && typeof workflow.id === 'string' && /^[a-z0-9-]{1,64}$/.test(workflow.id)
+    && typeof workflow.name === 'string' && workflow.name.trim() && workflow.name.length <= 120
+    && typeof workflow.module === 'string' && workflow.module.trim() && workflow.module.length <= 60
+    && Array.isArray(workflow.caseIds) && workflow.caseIds.length >= 2 && workflow.caseIds.length <= 30
+    && new Set(workflow.caseIds).size === workflow.caseIds.length
+    && workflow.caseIds.every((id) => cases.some((testCase) => testCase.id === id)));
 }
 
 /** 仅接受工作台支持的步骤类型，并限制步骤数和字段大小。 */
@@ -96,6 +118,25 @@ createServer(async (request, response) => {
       sendJson(response, 200, { cases });
       return;
     }
+    if (request.method === 'GET' && url.pathname === '/api/workflows') {
+      sendJson(response, 200, { workflows: await readWorkflows() });
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/api/workflows') {
+      const workflow = await requestJson(request);
+      const cases = await readCases();
+      if (!validateWorkflow(workflow, cases)) {
+        sendJson(response, 400, { error: '工作流格式不正确，请检查分类和用例选择。' });
+        return;
+      }
+      const workflows = await readWorkflows();
+      const existing = workflows.findIndex((item) => item.id === workflow.id);
+      if (existing >= 0) workflows[existing] = workflow;
+      else workflows.push(workflow);
+      await writeFile(workflowsPath, `${JSON.stringify(workflows, null, 2)}\n`, 'utf8');
+      sendJson(response, 200, { workflows });
+      return;
+    }
     if (request.method === 'POST' && url.pathname === '/api/run') {
       const payload = await requestJson(request);
       const ids = Array.isArray(payload.ids) ? payload.ids : [payload.id];
@@ -114,7 +155,7 @@ createServer(async (request, response) => {
       return;
     }
     // 独立页面路由共享同一单页壳；直接刷新或复制路由地址也能打开对应视图。
-    if (request.method === 'GET' && (['/', '/index.html', '/cases', '/cases/combination', '/storage', '/reports', '/settings'].includes(url.pathname)
+    if (request.method === 'GET' && (['/', '/index.html', '/cases', '/workflows', '/storage', '/reports', '/settings'].includes(url.pathname)
       || /^\/cases\/edit\/(?:new|[a-z0-9-]+)$/.test(url.pathname))) {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end(await readFile(path.join(root, 'public', 'workbench.html')));
