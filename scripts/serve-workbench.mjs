@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import {
   findCases,
   getBootstrap,
@@ -19,6 +20,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.WORKBENCH_PORT || 4174);
 let activeRun = null;
 let currentUser;
+
+// 工作台服务启动时统一读取本地数据库和运行环境配置，避免只在 Playwright 进程中加载 .env。
+dotenv.config({ path: path.join(root, '.env') });
 
 /** 仅接受受限工作流结构，且所有引用必须属于当前用户已保存的用例。 */
 function validateWorkflow(workflow, cases) {

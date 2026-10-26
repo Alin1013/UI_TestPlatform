@@ -2,9 +2,13 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import { initializeDatabase, getPool, saveCase, saveWorkflow } from './workbench-db.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// 迁移命令独立于 Playwright 配置运行，因此需要在访问数据库前显式加载仓库根目录的 .env。
+dotenv.config({ path: path.join(root, '.env') });
 
 /** 将旧版本的本地 JSON 一次性导入 PostgreSQL；文件不存在时直接跳过。 */
 async function readLegacy(fileName) {
