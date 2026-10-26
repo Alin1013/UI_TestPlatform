@@ -6,8 +6,8 @@ node_modules/
 playwright-report/
 midscene_report/
 test-results/
+# 仅兼容迁移旧版本的本地数据文件；新业务数据统一存储在 PostgreSQL。
 .local-test-cases.json
-# 工作流定义与用例一样属于本机数据，避免把个人执行编排提交到仓库。
 .local-test-workflows.json
 playwright/.cache/
 *.log
