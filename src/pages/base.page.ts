@@ -2,7 +2,7 @@
 import type { Page } from '@playwright/test';
 import { PlaywrightAgent, type PageAgent } from '@midscene/web';
 
-type MidscenePageAgent = Pick<PageAgent, 'aiAssert' | 'aiQuery'>;
+type MidscenePageAgent = Pick<PageAgent, 'aiAssert' | 'aiQuery' | 'aiAct'>;
 
 /** 为页面模型共享浏览器页面，并在确有视觉操作时创建 Midscene 适配器。 */
 export abstract class BasePage {

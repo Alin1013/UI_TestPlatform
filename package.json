@@ -10,7 +10,6 @@
     "test:ai": "node scripts/require-ai-config.mjs && playwright test --project=visual",
     "demo": "node scripts/serve-demo.mjs",
     "workbench": "node scripts/serve-workbench.mjs",
-    "db:migrate": "node scripts/db-migrate.mjs",
     "test:debug": "playwright test --project=smoke --headed",
     "test:report": "playwright show-report playwright-report",
     "typecheck": "tsc --noEmit"
@@ -21,8 +20,5 @@
     "dotenv": "^18.0.8",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "pg": "^8.23.1"
   }
 }

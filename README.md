@@ -6,12 +6,10 @@
 
 - Node.js 20 或更新版本
 - npm 与 Playwright Chromium
-- PostgreSQL 14 或更新版本
 
 ```sh
 npm ci
 npx playwright install chromium
-npm run db:migrate
 npm run typecheck
 npm test
 ```
@@ -27,18 +25,15 @@ npm run test:debug   # headed 调试
 npm run test:report  # 查看 HTML 报告
 npm run clean        # 清理报告与测试产物
 npm run workbench    # 打开本地用例工作台（http://127.0.0.1:4174）
-npm run db:migrate   # 创建/升级 PostgreSQL 表结构
 ```
 
-工作台支持通过界面组合“打开页面、点击、填写、检查可见、检查文本”步骤并运行，也支持保存 Midscene 语义用例。用户、运行环境、用例、用例步骤、工作流及工作流关联均存储在 PostgreSQL；页面“运行设置”可以直接维护环境配置。工作台启动前要求 `DATABASE_URL`，不会再把业务数据写入本地 JSON。
+工作台支持通过界面组合“打开页面、点击、填写、检查可见、检查文本”步骤并运行，也支持保存 Midscene 语义用例。用例保存在本地忽略文件 `.local-test-cases.json`；目标环境仍通过 `.env` 中的 `APP_BASE_URL` 和 `APP_ALLOWED_HOSTS` 配置，工作台仅监听回环地址。
 
 配置通过 `.env` 或进程环境传入，`.env.example` 是无秘密模板：
 
 - `APP_BASE_URL`：目标应用根地址；默认 `http://127.0.0.1:4173`，不会猜测或访问生产站点。
 - `APP_ALLOWED_HOSTS`：外部目标必填的精确主机 allowlist（逗号分隔）；不在列表中的主机在 Playwright 启动前拒绝。
 - `PLAYWRIGHT_WORKERS`：可选正整数并发上限；CI 未指定时使用 2。
-- `DATABASE_URL`：工作台 PostgreSQL 连接串；运行 `npm run db:migrate` 初始化表结构。
-- `WORKBENCH_USER_EMAIL`、`WORKBENCH_USER_NAME`：当前无登录模块时的本地工作台用户归属。
 - `OPENAI_API_KEY`、`MIDSCENE_MODEL_NAME`：仅 AI 用例需要。`OPENAI_BASE_URL` 用于组织批准的兼容网关。
 
 AI 项目显式通过 `npm run test:ai` 启动，不会因缺少凭据而静默跳过。模型供应商、模型名和网关配置应在组织策略批准后设置；不要将 `.env`、认证状态或真实敏感数据提交/发送给未经批准的外部模型。
