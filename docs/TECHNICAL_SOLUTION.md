@@ -103,6 +103,7 @@ Page Objects / Domain Flows
 | `OPENAI_API_KEY` | 仅 AI 用例 | 模型认证凭据 | 本地 `.env` 或 Jenkins Secret Text |
 | `OPENAI_BASE_URL` | 否 | OpenAI 兼容网关地址 | 仅在组织代理要求时设置；不要写入代码 |
 | `MIDSCENE_MODEL_NAME` | AI 用例 | 网关支持的模型名 | 按网关能力配置；不要假定所有服务都接受 `gpt-4o` |
+| `MIDSCENE_MODEL_FAMILY` | AI 用例 | Midscene 视觉定位模型族 | 例如 GPT-5 系列填写 `gpt-5`，不能从自定义模型名可靠推断 |
 | `CI` | CI | 开启 CI 限制和重试策略 | Jenkins 设置为 `true` |
 | `PLAYWRIGHT_WORKERS` | 否 | 控制并发上限 | 按目标环境容量调优 |
 

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { MODEL_FAMILY_VALUES } from '@midscene/shared/env';
 import {
   findCases,
   getBootstrap,
@@ -20,6 +21,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.WORKBENCH_PORT || 4174);
 let activeRun = null;
 let currentUser;
+
+// Midscene 使用模型族决定视觉定位协议；直接复用依赖导出的枚举，避免版本升级后预检规则过期。
+const SUPPORTED_MODEL_FAMILIES = new Set(MODEL_FAMILY_VALUES);
 
 // 工作台服务启动时统一读取本地数据库和运行环境配置，避免只在 Playwright 进程中加载 .env。
 dotenv.config({ path: path.join(root, '.env') });
@@ -77,7 +81,9 @@ function validateEnvironment(environment) {
     && Array.isArray(environment.allowed_hosts) && environment.allowed_hosts.every((host) => typeof host === 'string' && /^[a-z0-9.-]+$/i.test(host))
     && (environment.workers === null || environment.workers === undefined || (Number.isInteger(environment.workers) && environment.workers > 0))
     && (!environment.openai_base_url || /^https?:\/\/[^\s]+$/i.test(environment.openai_base_url))
-    && (!environment.midscene_model_name || environment.midscene_model_name.length <= 120));
+    && (!environment.midscene_model_name || environment.midscene_model_name.length <= 120)
+    && (!environment.midscene_model_family || (typeof environment.midscene_model_family === 'string'
+      && SUPPORTED_MODEL_FAMILIES.has(environment.midscene_model_family.trim()))));
 }
 
 /** 发送 JSON 响应，统一 API 的编码和错误格式。 */
@@ -102,7 +108,17 @@ function runCases(testCases, environment) {
   const environmentError = getEnvironmentRunError(environment);
   if (environmentError) return Promise.resolve({ passed: false, output: environmentError });
   if (testCases.some((testCase) => testCase.mode === 'semantic')) {
-    const missing = ['OPENAI_API_KEY', 'MIDSCENE_MODEL_NAME'].filter((name) => !process.env[name]?.trim());
+    // API key 只能从服务端继承；模型名可按当前环境覆盖全局默认值，避免环境设置被错误判为空。
+    const missing = [];
+    if (!process.env.OPENAI_API_KEY?.trim()) missing.push('OPENAI_API_KEY');
+    if (!(environment.midscene_model_name?.trim() || process.env.MIDSCENE_MODEL_NAME?.trim())) missing.push('MIDSCENE_MODEL_NAME');
+    const modelFamily = environment.midscene_model_family?.trim() || process.env.MIDSCENE_MODEL_FAMILY?.trim();
+    if (!modelFamily) {
+      return Promise.resolve({ passed: false, output: '语义用例缺少模型族配置：请在“运行设置”填写模型族（例如 gpt-5.6-sol 对应 gpt-5），或在 .env 设置 MIDSCENE_MODEL_FAMILY 后重启工作台。' });
+    }
+    if (!SUPPORTED_MODEL_FAMILIES.has(modelFamily)) {
+      return Promise.resolve({ passed: false, output: `模型族 ${modelFamily} 不受当前 Midscene 版本支持，请在“运行设置”检查模型族。` });
+    }
     if (missing.length) return Promise.resolve({ passed: false, output: `语义用例缺少模型配置：${missing.join(', ')}。请在 .env 中设置后重启工作台。` });
   }
   const cli = path.join(root, 'node_modules', '@playwright', 'test', 'cli.js');
@@ -117,6 +133,7 @@ function runCases(testCases, environment) {
         PLAYWRIGHT_WORKERS: environment.workers ? String(environment.workers) : '',
         OPENAI_BASE_URL: environment.openai_base_url || process.env.OPENAI_BASE_URL || '',
         MIDSCENE_MODEL_NAME: environment.midscene_model_name || process.env.MIDSCENE_MODEL_NAME || '',
+        MIDSCENE_MODEL_FAMILY: environment.midscene_model_family || process.env.MIDSCENE_MODEL_FAMILY || '',
         PLAYWRIGHT_CASE_IDS: JSON.stringify(testCases.map((testCase) => testCase.id)),
         // 将已从 PostgreSQL 读取的不可变快照传给 Playwright 子进程，避免测试进程绕过当前用户边界再次查询。
         PLAYWRIGHT_CASES_JSON: JSON.stringify(testCases),

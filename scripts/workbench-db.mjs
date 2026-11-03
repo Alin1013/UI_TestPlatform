@@ -35,10 +35,11 @@ export async function initializeDatabase() {
     const baseUrl = process.env.APP_BASE_URL?.trim() || 'http://127.0.0.1:4173';
     const allowedHosts = (process.env.APP_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean);
     await client.query(
-      `INSERT INTO environments (name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, is_default, created_by)
-       SELECT '本地演示环境', $1, $2, $3, $4, $5, true, $6
-       WHERE NOT EXISTS (SELECT 1 FROM environments WHERE created_by = $6 AND is_default = true)`,
-      [baseUrl, allowedHosts, parseWorkers(process.env.PLAYWRIGHT_WORKERS), process.env.OPENAI_BASE_URL || null, process.env.MIDSCENE_MODEL_NAME || null, user.rows[0].id],
+      `INSERT INTO environments (name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, midscene_model_family, is_default, created_by)
+       SELECT '本地演示环境', $1, $2, $3, $4, $5, $6, true, $7
+       WHERE NOT EXISTS (SELECT 1 FROM environments WHERE created_by = $7 AND is_default = true)`,
+      [baseUrl, allowedHosts, parseWorkers(process.env.PLAYWRIGHT_WORKERS), process.env.OPENAI_BASE_URL || null,
+        process.env.MIDSCENE_MODEL_NAME || null, process.env.MIDSCENE_MODEL_FAMILY || null, user.rows[0].id],
     );
     return user.rows[0];
   } finally {
@@ -58,7 +59,7 @@ export async function getBootstrap(userId) {
   const database = getPool();
   const [user, environments] = await Promise.all([
     database.query('SELECT id, email, display_name, role FROM users WHERE id = $1', [userId]),
-    database.query(`SELECT id, name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, is_default, updated_at
+    database.query(`SELECT id, name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, midscene_model_family, is_default, updated_at
                     FROM environments WHERE created_by = $1 ORDER BY is_default DESC, name`, [userId]),
   ]);
   return { user: user.rows[0], environments: environments.rows };
@@ -72,15 +73,17 @@ export async function saveEnvironment(userId, environment) {
     await client.query('BEGIN');
     if (environment.is_default) await client.query('UPDATE environments SET is_default = false WHERE created_by = $1', [userId]);
     const result = await client.query(
-      `INSERT INTO environments (id, name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, is_default, created_by)
-       VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO environments (id, name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, midscene_model_family, is_default, created_by)
+       VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, base_url = EXCLUDED.base_url,
          allowed_hosts = EXCLUDED.allowed_hosts, workers = EXCLUDED.workers, openai_base_url = EXCLUDED.openai_base_url,
-         midscene_model_name = EXCLUDED.midscene_model_name, is_default = EXCLUDED.is_default, updated_at = now()
+         midscene_model_name = EXCLUDED.midscene_model_name, midscene_model_family = EXCLUDED.midscene_model_family,
+         is_default = EXCLUDED.is_default, updated_at = now()
        WHERE environments.created_by = EXCLUDED.created_by
-       RETURNING id, name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, is_default, updated_at`,
+       RETURNING id, name, base_url, allowed_hosts, workers, openai_base_url, midscene_model_name, midscene_model_family, is_default, updated_at`,
       [environment.id || null, environment.name, environment.base_url, environment.allowed_hosts, environment.workers || null,
-        environment.openai_base_url || null, environment.midscene_model_name || null, Boolean(environment.is_default), userId],
+        environment.openai_base_url || null, environment.midscene_model_name || null, environment.midscene_model_family || null,
+        Boolean(environment.is_default), userId],
     );
     await client.query('COMMIT');
     return result.rows[0];

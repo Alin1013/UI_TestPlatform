@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS environments (
   workers INTEGER,
   openai_base_url TEXT,
   midscene_model_name TEXT,
+  -- 模型名称与模型族分开保存，避免 Midscene 无法根据自定义网关名称推断视觉定位协议。
+  midscene_model_family TEXT,
   is_default BOOLEAN NOT NULL DEFAULT false,
   created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS test_cases (
 
 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'manual';
 ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS prompt TEXT NOT NULL DEFAULT '';
+ALTER TABLE environments ADD COLUMN IF NOT EXISTS midscene_model_family TEXT;
 
 CREATE TABLE IF NOT EXISTS test_case_steps (
   id BIGSERIAL PRIMARY KEY,

@@ -39,7 +39,7 @@ npm run db:migrate   # 创建/升级 PostgreSQL 表结构
 - `PLAYWRIGHT_WORKERS`：可选正整数并发上限；CI 未指定时使用 2。
 - `DATABASE_URL`：工作台 PostgreSQL 连接串；运行 `npm run db:migrate` 初始化表结构。
 - `WORKBENCH_USER_EMAIL`、`WORKBENCH_USER_NAME`：当前无登录模块时的本地工作台用户归属。
-- `OPENAI_API_KEY`、`MIDSCENE_MODEL_NAME`：仅 AI 用例需要。`OPENAI_BASE_URL` 用于组织批准的兼容网关。
+- `OPENAI_API_KEY`、`MIDSCENE_MODEL_NAME`、`MIDSCENE_MODEL_FAMILY`：仅 AI 用例需要；模型族应按模型供应商与 Midscene 支持的系列填写，例如 GPT-5 系列用 `gpt-5`。`OPENAI_BASE_URL` 用于组织批准的兼容网关。
 
 AI 项目显式通过 `npm run test:ai` 启动，不会因缺少凭据而静默跳过。模型供应商、模型名和网关配置应在组织策略批准后设置；不要将 `.env`、认证状态或真实敏感数据提交/发送给未经批准的外部模型。
 
