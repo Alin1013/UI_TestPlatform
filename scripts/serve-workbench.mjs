@@ -145,7 +145,15 @@ function runCases(testCases, environment) {
     child.stdout.on('data', (chunk) => { output += chunk.toString(); });
     child.stderr.on('data', (chunk) => { output += chunk.toString(); });
     child.on('error', (error) => { activeRun = null; resolve({ passed: false, output: `无法启动测试：${error.message}` }); });
-    child.on('close', (code) => { activeRun = null; resolve({ passed: code === 0, output: output.slice(-12_000) }); });
+    child.on('close', (code) => {
+      activeRun = null;
+      const runOutput = output.slice(-12_000);
+      // 502 属于模型网关上游故障；在保留原始诊断的同时先显示可执行的中文结论。
+      const summary = /status:\s*502\b|502 服务暂时不可用/.test(runOutput)
+        ? 'Midscene 模型族配置已通过检查，但模型网关返回 HTTP 502（服务暂时不可用）。请检查网关上游状态后重试。\n\n'
+        : '';
+      resolve({ passed: code === 0, output: `${summary}${runOutput}` });
+    });
   });
 }
 
