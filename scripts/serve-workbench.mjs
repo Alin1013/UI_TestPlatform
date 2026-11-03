@@ -49,6 +49,25 @@ function validateCase(testCase) {
       && (step.action === 'goto' || (typeof step.selector === 'string' && step.selector.length <= 500)));
 }
 
+/** 在启动 Playwright 前检查外部目标白名单，避免用户只看到框架堆栈而不知道如何修复环境配置。 */
+function getEnvironmentRunError(environment) {
+  let target;
+  try {
+    target = new URL(environment.base_url);
+  } catch {
+    return '运行环境地址无效，请在运行设置中检查目标应用地址。';
+  }
+  const allowedHosts = (environment.allowed_hosts || []).map((host) => host.trim().toLowerCase());
+  // 外部环境必须由使用者明确授权目标主机；绝不因 base_url 已填写就自动扩大白名单。
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    return '运行环境地址必须使用 HTTP 或 HTTPS，请在运行设置中检查目标应用地址。';
+  }
+  if (target.origin !== 'http://127.0.0.1:4173' && !allowedHosts.includes(target.hostname.toLowerCase())) {
+    return `目标主机 ${target.hostname} 未加入允许主机，请在“运行设置”中将该主机加入允许列表后重试。`;
+  }
+  return null;
+}
+
 /** 校验前端可编辑的环境配置；API key 仍只保留在服务端进程环境。 */
 function validateEnvironment(environment) {
   return Boolean(environment
@@ -80,6 +99,8 @@ async function requestJson(request) {
 /** 使用所选环境执行一批数据库快照用例，并串行锁住工作台执行资源。 */
 function runCases(testCases, environment) {
   if (activeRun) return Promise.resolve({ busy: true, output: '已有用例正在执行，请稍后重试。' });
+  const environmentError = getEnvironmentRunError(environment);
+  if (environmentError) return Promise.resolve({ passed: false, output: environmentError });
   if (testCases.some((testCase) => testCase.mode === 'semantic')) {
     const missing = ['OPENAI_API_KEY', 'MIDSCENE_MODEL_NAME'].filter((name) => !process.env[name]?.trim());
     if (missing.length) return Promise.resolve({ passed: false, output: `语义用例缺少模型配置：${missing.join(', ')}。请在 .env 中设置后重启工作台。` });
